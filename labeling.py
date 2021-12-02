@@ -103,12 +103,14 @@ def zoom_in():
         return
     try:
         percent = int(zoom_var.get()) + 3
+        if percent < 30 or percent > 500:
+            raise Exception("Input must be within 30-500")
         zoom_var.set(str(percent))
         percent = percent / 100
         nw = int(bg.size[0] * percent)
         nh = int(bg.size[1] * percent)
         img = bg.resize((nw,nh))
-        fg = fg.resize((nw,nh))
+        fg = fg.resize((nw,nh), Image.NEAREST)
         now_showing = (now_showing + 1) % 2
         fg_switch = (fg_switch + 1) % 2
         bg_list[now_showing] = ImageTk.PhotoImage(img)
@@ -118,8 +120,8 @@ def zoom_in():
         canvas.itemconfig(fg_id, image = fg_list[fg_switch])
         canvas.tag_raise(fg_id)
         refresh_rect(percent, show = True)
-    except Exception:
-        messagebox.showwarning(title = "SB", message = "Input must be number only!!!")
+    except Exception as e:
+        messagebox.showwarning(title = "SB", message = e)
         zoom_var.set("100")
 
 def zoom_out():
@@ -128,12 +130,14 @@ def zoom_out():
         return
     try:
         percent = int(zoom_var.get()) - 3
+        if percent < 30 or percent > 500:
+            raise Exception("Input must be within 30-500")
         zoom_var.set(str(percent))
         percent = percent / 100
         nw = int(bg.size[0] * percent)
         nh = int(bg.size[1] * percent)
         img = bg.resize((nw,nh))
-        fg = fg.resize((nw,nh))
+        fg = fg.resize((nw,nh), Image.NEAREST)
         now_showing = (now_showing + 1) % 2
         fg_switch = (fg_switch + 1) % 2
         bg_list[now_showing] = ImageTk.PhotoImage(img)
@@ -143,8 +147,8 @@ def zoom_out():
         canvas.itemconfig(fg_id, image = fg_list[fg_switch])
         canvas.tag_raise(fg_id)
         refresh_rect(percent, show = True)
-    except Exception:
-        messagebox.showwarning(title = "SB", message = "Input must be number only!!!")
+    except Exception as e:
+        messagebox.showwarning(title = "SB", message = e)
         zoom_var.set("100")
 
 def zoom_enter(event):
@@ -153,12 +157,14 @@ def zoom_enter(event):
         return
     try:
         percent = int(zoom_var.get())
+        if percent < 30 or percent > 500:
+            raise Exception("Input must be within 30-500")
         zoom_var.set(str(percent))
         percent = percent / 100
         nw = int(bg.size[0] * percent)
         nh = int(bg.size[1] * percent)
         img = bg.resize((nw,nh))
-        fg = fg.resize((nw,nh))
+        fg = fg.resize((nw,nh), Image.NEAREST)
         now_showing = (now_showing + 1) % 2
         fg_switch = (fg_switch + 1) % 2
         bg_list[now_showing] = ImageTk.PhotoImage(img)
@@ -168,8 +174,8 @@ def zoom_enter(event):
         canvas.itemconfig(fg_id, image = fg_list[fg_switch])
         refresh_rect(percent, show = True)
 
-    except Exception:
-        messagebox.showwarning(title = "SB", message = "Input must be number only!!!")
+    except Exception as e:
+        messagebox.showwarning(title = "SB", message = e)
         zoom_var.set("100")
 
 def change_dir():
@@ -217,7 +223,7 @@ def save(event = None):
     if img_name in lb_dict:
         img_path = img_name
         lb_path = lb_dict[img_name]
-        fg_save = fg.resize((bg.size[0], bg.size[1]))
+        fg_save = fg.resize((bg.size[0], bg.size[1]), Image.NEAREST)
         fg_save.save(lb_path)
     if img_name in rect_dict:
         txt_path = rect_dict[img_name]
@@ -239,7 +245,7 @@ def save(event = None):
         txt_path = output_path + "/txt/" + str(cfg.current_img) + ".txt"
 
         bg.save(img_path)
-        fg_save = fg.resize((bg.size[0], bg.size[1]))
+        fg_save = fg.resize((bg.size[0], bg.size[1]), Image.NEAREST)
         fg_save.save(lb_path)
         print(txt_path)
         with open(txt_path, 'w') as f:
@@ -287,40 +293,44 @@ def create_point(x1, y1, x2, y2, **kwargs):
         canvas.itemconfig(fg_id, image = fg_list[fg_switch])
 
 def paint(event):
-    global bg_index, cfg, img_changed
+    global bg_index, cfg, img_changed, bg
     if bg_index == -1:
         return
+    current_select = rec_box.curselection()
+    percent = int(zoom_var.get())
+    zoom_var.set(str(percent))
+    percent = percent / 100
     if cfg.mode == "segmentation" and cfg.pencil_color != (0, 0, 0):
         img_changed = True
-        x1, y1 = (event.x - cfg.pencil_thickness), (event.y - cfg.pencil_thickness)
-        x2, y2 = (event.x + cfg.pencil_thickness), (event.y + cfg.pencil_thickness)
-        create_point(x1, y1, x2, y2, alpha = .5, fill = cfg.pencil_color)
+        x = int(hbar.get()[0] * bg.size[0] * percent) + event.x
+        y = int(vbar.get()[0] * bg.size[1] * percent) + event.y
+
+        # y1 = vbar.get()[0] * bg.size[1] + event.y - cfg.pencil_thickness
+        # x2 = hbar.get()[0] * bg.size[0] + event.x + cfg.pencil_thickness
+        # y2 = vbar.get()[0] * bg.size[1] + event.y + cfg.pencil_thickness
+
+        create_point(x - cfg.pencil_thickness, y - cfg.pencil_thickness, x + cfg.pencil_thickness, y + cfg.pencil_thickness, alpha = .5, fill = cfg.pencil_color)
     if cfg.mode == "detection":
-        current_select = rec_box.curselection()
+        
         if len(current_select) == 1:
-            percent = int(zoom_var.get())
-            zoom_var.set(str(percent))
-            percent = percent / 100
             
             idx = current_select[0]
-            startx = int(rect_pos[idx][0] * percent)
-            starty = int(rect_pos[idx][1] * percent)
-            endx = hbar.get()[0] * bg.size[0] + event.x
-            endy = vbar.get()[0] * bg.size[1] + event.y
-            canvas.coords(rectangles[idx], startx, starty, endx, endy)
+            startx = rect_pos[idx][0] * percent
+            starty = rect_pos[idx][1] * percent
+            endx = (hbar.get()[0] * bg.size[0]) * percent + event.x
+            endy = (vbar.get()[0] * bg.size[1]) * percent + event.y
+            canvas.coords(rectangles[idx], int(startx), int(starty), int(endx), int(endy))
             rect_pos[idx][2] = int(endx / percent)
             rect_pos[idx][3] = int(endy / percent)
 
         elif len(current_select) == 0:
-            percent = int(zoom_var.get())
-            zoom_var.set(str(percent))
-            percent = percent / 100
+            
             idx = -1
-            startx = int(rect_pos[idx][0] * percent)
-            starty = int(rect_pos[idx][1] * percent)
-            endx = hbar.get()[0] * bg.size[0] + event.x
-            endy = vbar.get()[0] * bg.size[1] + event.y
-            canvas.coords(rectangles[idx], startx, starty, endx, endy)
+            startx = rect_pos[idx][0] * percent
+            starty = rect_pos[idx][1] * percent
+            endx = (hbar.get()[0] * bg.size[0]) * percent + event.x
+            endy = (vbar.get()[0] * bg.size[1]) * percent + event.y
+            canvas.coords(rectangles[idx], int(startx), int(starty), int(endx), int(endy))
             rect_pos[idx][2] = int(endx / percent)
             rect_pos[idx][3] = int(endy / percent)
 
@@ -380,7 +390,7 @@ def switch_image(event):
     canvas.itemconfig(bg_id, image = bg_list[now_showing])
     if img_name in lb_dict:
         fg = Image.open(lb_dict[img_name])
-        fg = fg.resize((nw, nh))
+        fg = fg.resize((nw, nh), Image.NEAREST)
     else:
         fg = Image.new('RGBA', (nw, nh), (0, 0, 0, 0))
     fg_list[fg_switch] = ImageTk.PhotoImage(fg)
@@ -468,8 +478,8 @@ def on_button_press(event):
             idx = current_select[0]
             
             category = int(rect_type_e.get())
-            startx = hbar.get()[0] * bg.size[0] + event.x
-            starty = vbar.get()[0] * bg.size[1] + event.y
+            startx = int(hbar.get()[0] * bg.size[0] * percent) + event.x
+            starty = int(vbar.get()[0] * bg.size[1] * percent) + event.y
             canvas.coords(rectangles[idx], startx, starty, startx + 1, starty + 1)
             
             startx = int(startx / percent)
@@ -482,8 +492,8 @@ def on_button_press(event):
         if len(current_select) == 0:
             category = int(rect_type_e.get())
             rec_box.insert(tk.END, cfg.type_name[category])
-            startx = hbar.get()[0] * bg.size[0] + event.x
-            starty = vbar.get()[0] * bg.size[1] + event.y
+            startx = int(hbar.get()[0] * bg.size[0] * percent) + event.x
+            starty = int(vbar.get()[0] * bg.size[1] * percent) + event.y
             
             rectangle = canvas.create_rectangle(startx, starty, startx + 1, starty + 1, outline = RGB_to_Hex(cfg.type_color[category]))
 
