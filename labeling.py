@@ -1,5 +1,6 @@
 from genericpath import exists
 import os
+from tkinter.constants import S
 from typing import Text, cast
 from PIL import Image, ImageTk, ImageDraw
 import tkinter as tk
@@ -7,7 +8,7 @@ from tkinter import image_names, ttk,filedialog, font, messagebox
 from config import Configer
 import tkinter.colorchooser as cc
 
-from utils import RGB_to_Hex
+from utils import RGB_to_Hex, clip
 import time
 def add_imgs():
     global bg_index, now_showing, img_changed, bg, fg, fg_switch, rectangles, rect_pos
@@ -300,37 +301,46 @@ def paint(event):
     percent = int(zoom_var.get())
     zoom_var.set(str(percent))
     percent = percent / 100
+
+    
     if cfg.mode == "segmentation" and cfg.pencil_color != (0, 0, 0):
         img_changed = True
         x = int(hbar.get()[0] * bg.size[0] * percent) + event.x
         y = int(vbar.get()[0] * bg.size[1] * percent) + event.y
 
-        # y1 = vbar.get()[0] * bg.size[1] + event.y - cfg.pencil_thickness
-        # x2 = hbar.get()[0] * bg.size[0] + event.x + cfg.pencil_thickness
-        # y2 = vbar.get()[0] * bg.size[1] + event.y + cfg.pencil_thickness
-
         create_point(x - cfg.pencil_thickness, y - cfg.pencil_thickness, x + cfg.pencil_thickness, y + cfg.pencil_thickness, alpha = .5, fill = cfg.pencil_color)
     if cfg.mode == "detection":
-        
+        x_begin = int(hbar.get()[0] * bg.size[0] * percent)
+        y_begin = int(vbar.get()[0] * bg.size[1] * percent)
+
+        x = clip(event.x, 0, event.widget.winfo_width())
+        y = clip(event.y, 0, event.widget.winfo_height())
+    
         if len(current_select) == 1:
             
             idx = current_select[0]
-            startx = rect_pos[idx][0] * percent
-            starty = rect_pos[idx][1] * percent
-            endx = (hbar.get()[0] * bg.size[0]) * percent + event.x
-            endy = (vbar.get()[0] * bg.size[1]) * percent + event.y
-            canvas.coords(rectangles[idx], int(startx), int(starty), int(endx), int(endy))
+            startx = int(rect_pos[idx][0] * percent)
+            starty = int(rect_pos[idx][1] * percent)
+            endx = x_begin + x
+            endy = y_begin + y
+
+            endx = clip(endx, 0, int(bg.size[0] * percent))
+            endy = clip(endy, 0, int(bg.size[0] * percent))
+
+            canvas.coords(rectangles[idx], startx, starty, endx, endy)
             rect_pos[idx][2] = int(endx / percent)
             rect_pos[idx][3] = int(endy / percent)
 
         elif len(current_select) == 0:
             
             idx = -1
-            startx = rect_pos[idx][0] * percent
-            starty = rect_pos[idx][1] * percent
-            endx = (hbar.get()[0] * bg.size[0]) * percent + event.x
-            endy = (vbar.get()[0] * bg.size[1]) * percent + event.y
-            canvas.coords(rectangles[idx], int(startx), int(starty), int(endx), int(endy))
+            startx = int(rect_pos[idx][0] * percent)
+            starty = int(rect_pos[idx][1] * percent)
+            endx = x_begin + x
+            endy = y_begin + y
+            endx = clip(endx, 0, int(bg.size[0] * percent))
+            endy = clip(endy, 0, int(bg.size[0] * percent))
+            canvas.coords(rectangles[idx], startx, starty, endx, endy)
             rect_pos[idx][2] = int(endx / percent)
             rect_pos[idx][3] = int(endy / percent)
 
@@ -474,12 +484,24 @@ def on_button_press(event):
         zoom_var.set(str(percent))
         percent = percent / 100
         current_select = rec_box.curselection()
+
+        x_begin = int(hbar.get()[0] * bg.size[0] * percent)
+        y_begin = int(vbar.get()[0] * bg.size[1] * percent)
+
+        x = clip(event.x, 0, event.widget.winfo_width())
+        y = clip(event.y, 0, event.widget.winfo_height())
+        
         if len(current_select) == 1:
             idx = current_select[0]
             
             category = int(rect_type_e.get())
-            startx = int(hbar.get()[0] * bg.size[0] * percent) + event.x
-            starty = int(vbar.get()[0] * bg.size[1] * percent) + event.y
+            
+            startx = x_begin + x
+            starty = y_begin + y
+            
+            startx = clip(startx, 0, int(bg.size[0] * percent))
+            starty = clip(starty, 0, int(bg.size[0] * percent))
+
             canvas.coords(rectangles[idx], startx, starty, startx + 1, starty + 1)
             
             startx = int(startx / percent)
@@ -492,15 +514,17 @@ def on_button_press(event):
         if len(current_select) == 0:
             category = int(rect_type_e.get())
             rec_box.insert(tk.END, cfg.type_name[category])
-            startx = int(hbar.get()[0] * bg.size[0] * percent) + event.x
-            starty = int(vbar.get()[0] * bg.size[1] * percent) + event.y
-            
+            startx = x_begin + x
+            starty = y_begin + y
+            startx = clip(startx, 0, int(bg.size[0] * percent))
+            starty = clip(starty, 0, int(bg.size[0] * percent))
             rectangle = canvas.create_rectangle(startx, starty, startx + 1, starty + 1, outline = RGB_to_Hex(cfg.type_color[category]))
 
             rectangles.append(rectangle)
 
             startx = int(startx / percent)
             starty = int(starty / percent)
+
             rect_pos.append([startx, starty, startx + 1, starty + 1, category])
             
             img_changed = True
@@ -512,9 +536,17 @@ def on_button_release(event):
         return
     if cfg.mode == "detection":
         for i in range(len(rect_pos))[::-1]:
-            if (rect_pos[i][2] - rect_pos[i][0]) <= 0 or (rect_pos[i][3] - rect_pos[i][1]) <= 0:
-                del rect_pos[i]
+            x1 = min(rect_pos[i][0], rect_pos[i][2])
+            x2 = max(rect_pos[i][0], rect_pos[i][2])
+            y1 = min(rect_pos[i][1], rect_pos[i][3])
+            y2 = max(rect_pos[i][1], rect_pos[i][3])
+            rect_pos[i][0] = x1
+            rect_pos[i][1] = y1
+            rect_pos[i][2] = x2
+            rect_pos[i][3] = y2
+            if rect_pos[i][2] == rect_pos[i][0] or rect_pos[i][3] == rect_pos[i][1]:
                 canvas.delete(rectangles[i])
+                del rectangles[i]
                 del rect_pos[i]
                 rec_box.delete(i)
 
@@ -549,6 +581,17 @@ def delete_select_rec(all = False):
         del rectangles[i]
         del rect_pos[i]
     
+def closeWindow():
+    global img_changed
+    if img_changed:
+        msg = tk.messagebox.askquestion(title = "warning", message = "The current image has not been saved, do you want to save it!")
+        if msg == "yes":
+            save()
+        else:
+            print("fnndp")
+            img_changed = False
+    root.destroy()
+
 
 cfg = Configer()
 
@@ -732,5 +775,7 @@ canvas.bind("<ButtonPress-1>", on_button_press)
 canvas.bind("<ButtonRelease-1>", on_button_release)
 img_box.bind('<Double-Button>', switch_image)
 rec_box.bind('<Double-Button>', highlight_box)
+
+root.protocol("WM_DELETE_WINDOW", closeWindow)
 root.mainloop()
 cfg.save_config()

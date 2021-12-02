@@ -22,7 +22,7 @@ class Configer():
             self.current_img = 0
             self.rect_type = 0
             self.type_color = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255), (0, 255, 255)]
-            self.type_name = ["滴虫", "菌丝", "孢子", "大干", "fnndp", "cb"]
+            self.type_name = ["class1", "class2", "class3", "class4", "class5", "class6"]
 
 
     def save_config(self):
